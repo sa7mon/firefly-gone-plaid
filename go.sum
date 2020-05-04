@@ -1,0 +1,4 @@
+github.com/djimenez/iconv-go v0.0.0-20160305225143-8960e66bd3da/go.mod h1:ns+zIWBBchgfRdxNgIJWn2x6U95LQchxeqiN5Cgdgts=
+github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
+github.com/plaid/plaid-go v0.0.0-20200128010337-fe831fc21a4d h1:rhKSm00M5eHoFItsFbLaY0pIrTwLZeAxINDHx1uxKTg=
+github.com/plaid/plaid-go v0.0.0-20200128010337-fe831fc21a4d/go.mod h1:c7cDT1Lkcr0AgKJGVIG+oCa07jOrrg4Um8nduQ1eQN0=
