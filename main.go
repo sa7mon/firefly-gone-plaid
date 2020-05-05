@@ -33,11 +33,16 @@ type Account struct {
 
 func (c Connection) GetAccountByPlaidAccountId(plaidId string) (Account, error){
 	for _, account := range c.Accounts {
+		fmt.Println(account.PlaidAccountId)
 		if account.PlaidAccountId == plaidId {
 			return account, nil
 		}
 	}
 	return Account{}, errors.New("couldn't find account")
+}
+
+func SetPlaidAccountId(a *Account, accountId string) {
+	a.PlaidAccountId = accountId
 }
 
 func main() {
@@ -63,6 +68,8 @@ func main() {
 	}
 	client, err := plaid.NewClient(clientOptions)
 
+	plaid2fireflyId := make(map[string]int)
+
 	for _, connection := range config.Connections {
 		resp, err := client.GetTransactions(connection.Token, "2020-04-01", "2020-05-01")
 		if err != nil {
@@ -74,8 +81,7 @@ func main() {
 			matchedAccount := false
 			for _, connAccount := range connection.Accounts {
 				if respAccount.Mask == connAccount.AccountLastFour {
-					connAccount.PlaidAccountId = respAccount.AccountID
-					fmt.Println("Matched Plaid account")
+					plaid2fireflyId[respAccount.AccountID] = connAccount.FireflyAccountId
 					matchedAccount = true
 					break
 				}
@@ -84,6 +90,15 @@ func main() {
 				fmt.Println("Warning: Couldn't match Plaid account id", respAccount.AccountID, "to an account in the config")
 			}
 		}
-	}
 
+		for _, plaidTransaction := range resp.Transactions {
+			id, a := plaid2fireflyId[plaidTransaction.AccountID]
+			if a {
+				fmt.Println("Transaction has known account:", id)
+			} else {
+				fmt.Println("Unknown account")
+			}
+		}
+
+	}
 }
