@@ -7,9 +7,11 @@ import (
 	"github.com/plaid/plaid-go/plaid"
 	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 type Config struct {
+	FireflyApiBaseUrl string `json:"firefly_api_base_url"`
 	FireflyToken   string `json:"firefly_token"`
 	PlaidClientId  string `json:"plaid_client_id"`
 	PlaidSecret    string `json:"plaid_secret"`
@@ -31,6 +33,24 @@ type Account struct {
 	PlaidAccountId string
 }
 
+type TransactionRequest struct {
+	ErrorIfDuplicateHash bool `json:"error_if_duplicate_hash"`
+	ApplyRules bool `json:"apply_rules"`
+	Transactions []Transaction `json:"transactions"`
+}
+
+type Transaction struct {
+	Type string `json:"type"`  					// deposit, withdrawl, transfer, reconciliation
+	Date string `json:"date"`  					// YYYY-MM-DD
+	Amount float64 `json:"amount"` 				// 11.11
+	Description string `json:"description"`		// "Groceries"
+	CurrencyId int `json:"currency_id"`			// 17 - USD
+	CategoryName string `json:"category_name"`  // "Food" - doesn't have to exist in Firefly already
+	SourceID int `json:"source_id"`				// ID of Firefly account
+	Notes string `json:"notes"`					// "Imported by Firefly-Gone-Plaid"
+	ExternalId string `json:"external_id"`		// Plaid transaction ID?
+}
+
 func (c Connection) GetAccountByPlaidAccountId(plaidId string) (Account, error){
 	for _, account := range c.Accounts {
 		fmt.Println(account.PlaidAccountId)
@@ -41,8 +61,33 @@ func (c Connection) GetAccountByPlaidAccountId(plaidId string) (Account, error){
 	return Account{}, errors.New("couldn't find account")
 }
 
-func SetPlaidAccountId(a *Account, accountId string) {
-	a.PlaidAccountId = accountId
+func MakeTransaction(ptrans plaid.Transaction, fireflyAccountId int) (Transaction, error) {
+	t := Transaction{}
+	if ptrans.Amount < 0 {
+		t.Type = "deposit"
+	} else {
+		t.Type = "withdrawl"
+	}
+	t.Date = ptrans.Date
+	t.Amount = ptrans.Amount
+	t.Description = ptrans.Name
+	t.CurrencyId = 17
+	t.CategoryName = strings.Join(ptrans.Category, "|")
+	t.SourceID = fireflyAccountId
+	t.Notes = "Imported by Firefly-Gone-Plaid"
+	t.ExternalId = ptrans.ID
+	return t, nil
+}
+
+func (t TransactionRequest) StoreTransaction(c Config) {
+	// Send transaction to Firefly API
+	// POST http://bionic.home.lan:7080/api/v1/transactions
+	// Content-Type: JSON
+	// Headers:
+	//		Authorization: Bearer Token
+	//		Accept: application/json
+
+
 }
 
 func main() {
@@ -93,11 +138,28 @@ func main() {
 
 		for _, plaidTransaction := range resp.Transactions {
 			id, a := plaid2fireflyId[plaidTransaction.AccountID]
-			if a {
-				fmt.Println("Transaction has known account:", id)
-			} else {
-				fmt.Println("Unknown account")
+			if !a {
+				fmt.Println("Warning: unknown account ID:", id)
+				continue
 			}
+			if plaidTransaction.Pending {
+				fmt.Println("Warning: Skipping pending transaction: ", plaidTransaction.ID)
+				continue
+			}
+
+			t, terr := MakeTransaction(plaidTransaction, id)
+			if terr != nil {
+				fmt.Println("Error creating transaction: ", terr)
+			}
+			transactions := make([]Transaction, 1) // TODO: Simplify this
+			transactions = append(transactions, t)
+
+			fireflyTransaction := TransactionRequest{
+				ErrorIfDuplicateHash: true,
+				ApplyRules: true,
+				Transactions: transactions,
+			}
+			fireflyTransaction.StoreTransaction(config) // Send to Firefly API
 		}
 
 	}
