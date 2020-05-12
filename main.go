@@ -84,7 +84,7 @@ func MakeTransaction(ptrans plaid.Transaction, fireflyAccountId int) (Transactio
 	t.Date = ptrans.Date
 	t.Description = ptrans.Name
 	t.CurrencyId = 17
-	t.CategoryName = strings.Join(ptrans.Category, "|")
+	t.CategoryName = strings.Join(ptrans.Category, " | ")
 	t.Notes = "Imported by Firefly-Gone-Plaid"
 	t.ExternalId = ptrans.ID
 	return t, nil
@@ -200,12 +200,12 @@ func main() {
 			}
 		}
 
-		log.Println(fmt.Sprintf("Got %d Plaid transactions to process",len(resp.Transactions)))
+		log.Println(fmt.Sprintf("[%q] Got %d Plaid transactions to process",connection.InstitutionNickname,len(resp.Transactions)))
 
 		for i, plaidTransaction := range resp.Transactions {
-			id, a := plaid2fireflyId[plaidTransaction.AccountID]
+			fireflyAccountId, a := plaid2fireflyId[plaidTransaction.AccountID]
 			if !a {
-				log.Println("Warning: unknown account ID:", id)
+				log.Println("Warning: unknown account ID:", plaidTransaction.AccountID)
 				continue
 			}
 			if plaidTransaction.Pending {
@@ -213,7 +213,7 @@ func main() {
 				continue
 			}
 
-			t, terr := MakeTransaction(plaidTransaction, id)
+			t, terr := MakeTransaction(plaidTransaction, fireflyAccountId)
 			if terr != nil {
 				fmt.Println("Error creating transaction: ", terr)
 			}
@@ -228,13 +228,16 @@ func main() {
 			err = fireflyTransaction.StoreTransaction(config) // Send to Firefly API
 			if err != nil {
 				if strings.Contains(err.Error(), "Duplicate of transaction #") {
-					log.Println(fmt.Sprintf("Transaction %d: duplicate", i))
+					log.Println(fmt.Sprintf("[%s] Transaction %d (Account %d): duplicate",
+						connection.InstitutionNickname, i, fireflyAccountId))
 				} else {
-					log.Println(fmt.Sprintf("Transaction %d: error", i))
+					log.Println(fmt.Sprintf("[%s] Transaction %d (Account %d): error",
+						connection.InstitutionNickname, i, fireflyAccountId))
 					log.Println(err.Error())
 				}
 			} else {
-				log.Println(fmt.Sprintf("Transaction %d: processed", i))
+				log.Println(fmt.Sprintf("[%s] Transaction %d (Account %d): processed",
+					connection.InstitutionNickname, i, fireflyAccountId))
 			}
 		}
 	}
