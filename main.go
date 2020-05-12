@@ -160,7 +160,7 @@ func main() {
 	var config Config
 	err = json.Unmarshal(data, &config)
 	if err != nil {
-		log.Println("Error reading JSON file: ", err)
+		log.Fatal("Error reading JSON file: ", err)
 	}
 
 	clientOptions := plaid.ClientOptions{
@@ -182,7 +182,7 @@ func main() {
 	for _, connection := range config.Connections {
 		resp, err := client.GetTransactionsWithOptions(connection.Token, transactionOptions)
 		if err != nil {
-			log.Println("Error getting transactions: ", err)
+			log.Println(fmt.Sprintf("[%s] Error getting transactions: %s", connection.InstitutionNickname, err.Error()))
 		}
 
 		for _, respAccount := range resp.Accounts {
@@ -196,11 +196,13 @@ func main() {
 				}
 			}
 			if matchedAccount == false {
-				fmt.Println("Warning: Couldn't match Plaid account id", respAccount.AccountID, "to an account in the config")
+				log.Println(fmt.Sprintf("[%s} Warning: Couldn't match Plaid account id %s to an account in the config",
+					connection.InstitutionNickname, respAccount.AccountID))
 			}
 		}
 
-		log.Println(fmt.Sprintf("[%q] Got %d Plaid transactions to process",connection.InstitutionNickname,len(resp.Transactions)))
+		log.Println(fmt.Sprintf("[%s] Got %d Plaid transactions to process",
+			connection.InstitutionNickname,len(resp.Transactions)))
 
 		for i, plaidTransaction := range resp.Transactions {
 			fireflyAccountId, a := plaid2fireflyId[plaidTransaction.AccountID]
