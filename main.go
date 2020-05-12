@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/plaid/plaid-go/plaid"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -34,19 +37,20 @@ type Account struct {
 }
 
 type TransactionRequest struct {
-	ErrorIfDuplicateHash bool `json:"error_if_duplicate_hash"`
-	ApplyRules bool `json:"apply_rules"`
-	Transactions []Transaction `json:"transactions"`
+	ErrorIfDuplicateHash bool   `json:"error_if_duplicate_hash"`
+	ApplyRules bool 			`json:"apply_rules"`
+	Transactions []Transaction  `json:"transactions"`
 }
 
 type Transaction struct {
-	Type string `json:"type"`  					// deposit, withdrawl, transfer, reconciliation
+	Type string `json:"type"`  					// deposit, withdrawal, transfer, reconciliation
 	Date string `json:"date"`  					// YYYY-MM-DD
 	Amount float64 `json:"amount"` 				// 11.11
 	Description string `json:"description"`		// "Groceries"
 	CurrencyId int `json:"currency_id"`			// 17 - USD
 	CategoryName string `json:"category_name"`  // "Food" - doesn't have to exist in Firefly already
-	SourceID int `json:"source_id"`				// ID of Firefly account
+	SourceID int `json:"source_id"`				// ID of Firefly account for withdrawal
+	DestinationID int `json:"destination_id"`	// ID of Firefly account for deposit
 	Notes string `json:"notes"`					// "Imported by Firefly-Gone-Plaid"
 	ExternalId string `json:"external_id"`		// Plaid transaction ID?
 }
@@ -62,24 +66,29 @@ func (c Connection) GetAccountByPlaidAccountId(plaidId string) (Account, error){
 }
 
 func MakeTransaction(ptrans plaid.Transaction, fireflyAccountId int) (Transaction, error) {
+	if ptrans.Date == "" {
+		return Transaction{}, errors.New("required field 'Date' is blank")
+	}
 	t := Transaction{}
 	if ptrans.Amount < 0 {
 		t.Type = "deposit"
+		t.Amount = ptrans.Amount * -1
+		t.DestinationID = fireflyAccountId
 	} else {
-		t.Type = "withdrawl"
+		t.Type = "withdrawal"
+		t.Amount = ptrans.Amount
+		t.SourceID = fireflyAccountId
 	}
 	t.Date = ptrans.Date
-	t.Amount = ptrans.Amount
 	t.Description = ptrans.Name
 	t.CurrencyId = 17
 	t.CategoryName = strings.Join(ptrans.Category, "|")
-	t.SourceID = fireflyAccountId
 	t.Notes = "Imported by Firefly-Gone-Plaid"
 	t.ExternalId = ptrans.ID
 	return t, nil
 }
 
-func (t TransactionRequest) StoreTransaction(c Config) {
+func (t TransactionRequest) StoreTransaction(c Config) error {
 	// Send transaction to Firefly API
 	// POST http://bionic.home.lan:7080/api/v1/transactions
 	// Content-Type: JSON
@@ -87,7 +96,34 @@ func (t TransactionRequest) StoreTransaction(c Config) {
 	//		Authorization: Bearer Token
 	//		Accept: application/json
 
+	payload, err := json.Marshal(t)
+	if err != nil {
+		return errors.New("Error: " + err.Error())
+	}
 
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/transactions", c.FireflyApiBaseUrl),
+		bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("User-Agent", "Firefly-Gone-Plaid v0.1")
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer " + c.FireflyToken)
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyString := string(bodyBytes)
+		fireflyError := fmt.Sprintf("%q - %q\n%+v", resp.Status, bodyString, t)
+		return errors.New(fireflyError)
+	}
+	return nil
 }
 
 func main() {
@@ -101,7 +137,7 @@ func main() {
 	var config Config
 	err = json.Unmarshal(data, &config)
 	if err != nil {
-		fmt.Println("Error reading JSON file: ", err)
+		log.Println("Error reading JSON file: ", err)
 	}
 
 	clientOptions := plaid.ClientOptions{
@@ -118,7 +154,7 @@ func main() {
 	for _, connection := range config.Connections {
 		resp, err := client.GetTransactions(connection.Token, "2020-04-01", "2020-05-01")
 		if err != nil {
-			fmt.Println("Error getting transactions: ", err)
+			log.Println("Error getting transactions: ", err)
 		}
 
 		for _, respAccount := range resp.Accounts {
@@ -136,14 +172,16 @@ func main() {
 			}
 		}
 
-		for _, plaidTransaction := range resp.Transactions {
+		log.Println(fmt.Sprintf("Got %d Plaid transactions to process",len(resp.Transactions)))
+
+		for i, plaidTransaction := range resp.Transactions {
 			id, a := plaid2fireflyId[plaidTransaction.AccountID]
 			if !a {
-				fmt.Println("Warning: unknown account ID:", id)
+				log.Println("Warning: unknown account ID:", id)
 				continue
 			}
 			if plaidTransaction.Pending {
-				fmt.Println("Warning: Skipping pending transaction: ", plaidTransaction.ID)
+				log.Println("Warning: Skipping pending transaction: ", plaidTransaction.ID)
 				continue
 			}
 
@@ -151,7 +189,7 @@ func main() {
 			if terr != nil {
 				fmt.Println("Error creating transaction: ", terr)
 			}
-			transactions := make([]Transaction, 1) // TODO: Simplify this
+			transactions := make([]Transaction, 0) // TODO: Simplify this
 			transactions = append(transactions, t)
 
 			fireflyTransaction := TransactionRequest{
@@ -159,8 +197,13 @@ func main() {
 				ApplyRules: true,
 				Transactions: transactions,
 			}
-			fireflyTransaction.StoreTransaction(config) // Send to Firefly API
+			err = fireflyTransaction.StoreTransaction(config) // Send to Firefly API
+			if err != nil {
+				log.Println(fmt.Sprintf("Transaction %d error", i))
+				log.Println(err.Error())
+			} else {
+				log.Println(fmt.Sprintf("Transaction %d processed", i))
+			}
 		}
-
 	}
 }
