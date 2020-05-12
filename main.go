@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"github.com/plaid/plaid-go/plaid"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -127,8 +129,29 @@ func (t TransactionRequest) StoreTransaction(c Config) error {
 }
 
 func main() {
+	configFilePath := flag.String("config", "", "Path to config file. (Required)")
+	startDate := flag.String("start-date", "", "Start date of range to fetch transactions for. (Required)")
+	endDate := flag.String("end-date", "", "End date of range to fetch transactions for. (Required)")
+	flag.Parse()
+
+	if *configFilePath == ""{
+		fmt.Printf("Error: config file path required.")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+	if *startDate == ""{
+		fmt.Printf("Error: Start Date required.")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+	if *endDate == ""{
+		fmt.Printf("Error: End Date required.")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
 	// read file
-	data, err := ioutil.ReadFile("./config.json")
+	data, err := ioutil.ReadFile(*configFilePath)
 	if err != nil {
 		fmt.Print(err)
 	}
@@ -151,8 +174,13 @@ func main() {
 
 	plaid2fireflyId := make(map[string]int)
 
+	transactionOptions := plaid.GetTransactionsOptions{
+		StartDate: *startDate,
+		EndDate: *endDate,
+		Count: 500,
+	}
 	for _, connection := range config.Connections {
-		resp, err := client.GetTransactions(connection.Token, "2020-04-01", "2020-05-01")
+		resp, err := client.GetTransactionsWithOptions(connection.Token, transactionOptions)
 		if err != nil {
 			log.Println("Error getting transactions: ", err)
 		}
@@ -199,10 +227,14 @@ func main() {
 			}
 			err = fireflyTransaction.StoreTransaction(config) // Send to Firefly API
 			if err != nil {
-				log.Println(fmt.Sprintf("Transaction %d error", i))
-				log.Println(err.Error())
+				if strings.Contains(err.Error(), "Duplicate of transaction #") {
+					log.Println(fmt.Sprintf("Transaction %d: duplicate", i))
+				} else {
+					log.Println(fmt.Sprintf("Transaction %d: error", i))
+					log.Println(err.Error())
+				}
 			} else {
-				log.Println(fmt.Sprintf("Transaction %d processed", i))
+				log.Println(fmt.Sprintf("Transaction %d: processed", i))
 			}
 		}
 	}
