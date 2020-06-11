@@ -1,6 +1,12 @@
 # Firefly Gone Plaid
 
-A connector to add transactions from Plaid to [Firefly III](https://github.com/firefly-iii/firefly-iii)
+A connector to add financial transactions from the Plaid API to [Firefly III](https://github.com/firefly-iii/firefly-iii)
+
+<p align="center">
+<img width="480" height="260" src="https://user-images.githubusercontent.com/3712226/84401910-7355cb00-abc9-11ea-92f4-3be6fa398f7a.png"><br />"Firefly.....it's gone Plaid!"
+</p>
+
+
 
 ## Usage
 
