@@ -214,7 +214,7 @@ func main() {
 				}
 			}
 			if matchedAccount == false {
-				log.Println(fmt.Sprintf("[%s} Warning: Couldn't match Plaid account id %s to an account in the config",
+				log.Println(fmt.Sprintf("[%s] Warning: Couldn't match Plaid account id %s to an account in the config",
 					connection.InstitutionNickname, respAccount.AccountID))
 			}
 		}
@@ -229,7 +229,7 @@ func main() {
 				continue
 			}
 			if plaidTransaction.Pending {
-				log.Println("Warning: Skipping pending transaction: ", plaidTransaction.ID)
+				log.Println(fmt.Sprintf("[%s] Warning: Skipping pending transaction: %s", connection.InstitutionNickname, plaidTransaction.ID))
 				continue
 			}
 
