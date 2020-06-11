@@ -6,8 +6,6 @@ A connector to add financial transactions from the Plaid API to [Firefly III](ht
 <img width="480" height="260" src="https://user-images.githubusercontent.com/3712226/84401910-7355cb00-abc9-11ea-92f4-3be6fa398f7a.png"><br />"Firefly.....it's gone Plaid!"
 </p>
 
-
-
 ## Usage
 
 **Standalone**
@@ -71,5 +69,6 @@ Before running the tool, you'll need to:
 }
 ```
 
-All "*_nickname" fields can be set to whatever you want. The names will only be used in logs.
-
+**Note:**
+* All "*_nickname" fields can be set to anything. The names will only be used in logs.
+* The `firefly_account_id` must be an ID of a Firefly asset account. Expense and revenue accounts do not currently work.
