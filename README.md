@@ -26,6 +26,7 @@ docker run --rm -v $(pwd)/config:/config:ro hothamandcheese/firefly-gone-plaid:l
 
 Before running the tool, you'll need to:
 
+0. Generate a Personal Access Token in Firefly III (Options > Profile > Create new token)
 1. Create Plaid account
 2. Use the [Plaid Quickstart](https://github.com/plaid/quickstart) to connect your bank accounts to your Plaid account and get your Plaid `access-development-X` tokens
 3. Create a `config.json` file that follows this basic schema:
