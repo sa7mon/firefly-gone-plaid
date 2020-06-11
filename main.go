@@ -163,6 +163,22 @@ func main() {
 		log.Fatal("Error reading JSON file: ", err)
 	}
 
+	// Check for empty config options
+	optionsToCheck := make(map[string]string)
+	optionsToCheck["firefly_api_base_url"] = config.FireflyApiBaseUrl
+	optionsToCheck["firefly_token"] = config.FireflyToken
+	optionsToCheck["plaid_client_id"] = config.PlaidClientId
+	optionsToCheck["plaid_secret"] = config.PlaidSecret
+	optionsToCheck["plaid_public_key"] = config.PlaidPublicKey
+	for k, v := range optionsToCheck {
+		if v == "" {
+			log.Fatal(fmt.Sprintf("Error: Missing config.json option: %s", k))
+		}
+	}
+	if len(config.Connections) < 1 {
+		log.Fatal("Error: No connections found in config.json")
+	}
+
 	clientOptions := plaid.ClientOptions{
 		ClientID:    config.PlaidClientId,
 		Secret:      config.PlaidSecret,
@@ -173,6 +189,8 @@ func main() {
 	client, err := plaid.NewClient(clientOptions)
 
 	plaid2fireflyId := make(map[string]int)
+
+	log.Println("Getting transactions from Plaid...")
 
 	transactionOptions := plaid.GetTransactionsOptions{
 		StartDate: *startDate,
