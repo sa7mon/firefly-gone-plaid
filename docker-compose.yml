@@ -1,0 +1,8 @@
+version: '2'
+services:
+  firefly-gone-plaid:
+    container_name: firefly-gone-plaid
+    image: hothamandcheese/firefly-gone-plaid
+    restart: unless-stopped
+    volumes:
+      - ./config:/config
