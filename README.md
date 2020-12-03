@@ -17,8 +17,8 @@ go build -o firefly-gone-plaid
 
 **Docker**
 
-```
-docker pull hothamandcheese/firefly-gone-plaid:latest
+```bash
+docker build . -t hothamandcheese/firefly-gone-plaid:latest
 docker run --rm -v $(pwd)/config:/config:ro hothamandcheese/firefly-gone-plaid:latest --config /config/config.json --start-date 2020-05-15 --end-date 2020-06-11
 ```
 
